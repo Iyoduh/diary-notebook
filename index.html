@@ -458,6 +458,9 @@
         firebase.initializeApp(firebaseConfig);
       }
       state.db = firebase.firestore();
+      if (typeof state.db.enableNetwork === 'function') {
+        await state.db.enableNetwork();
+      }
       return true;
     }catch(e){
       console.warn('Firebase init failed', e);
@@ -467,8 +470,17 @@
   }
 
   async function ensureFirebase(){
-    if(state.db) return true;
-    return await initFirebase();
+    if(!state.db){
+      return await initFirebase();
+    }
+    if (typeof state.db.enableNetwork === 'function') {
+      try{
+        await state.db.enableNetwork();
+      }catch(e){
+        console.warn('Firestore enableNetwork failed', e);
+      }
+    }
+    return true;
   }
 
   async function loadInitial(){
@@ -504,7 +516,10 @@
     if(!state.config || !state.config.notebookId) return;
     if(!await ensureFirebase()) return;
     try{
-      const doc = await state.db.collection('notebooks').doc(state.config.notebookId).get();
+      if (typeof state.db.enableNetwork === 'function') {
+        await state.db.enableNetwork();
+      }
+      const doc = await state.db.collection('notebooks').doc(state.config.notebookId).get({ source: 'server' });
       if(doc.exists){
         const data = doc.data();
         if(data && data.passcode !== state.config.passcode) return;
@@ -559,7 +574,7 @@
     try{
       const notebookId = normalizeNotebookId(cfg.notebookId || createRandomNotebookId());
       const doc = state.db.collection('notebooks').doc(notebookId);
-      const snapshot = await doc.get();
+      const snapshot = await doc.get({ source: 'server' });
       if(snapshot.exists){
         return { success: false, error: 'Энэ кодтой тэмдэглэл аль хэдийн үүссэн байна.' };
       }
@@ -588,7 +603,7 @@
         return { success: false, error: 'Дэвтэрийн код заавал шаардлагатай.' };
       }
       const doc = state.db.collection('notebooks').doc(notebookId);
-      const snapshot = await doc.get();
+      const snapshot = await doc.get({ source: 'server' });
       if(!snapshot.exists){
         return { success: false, error: 'Ийм кодтой тэмдэглэл олдсонгүй.' };
       }
