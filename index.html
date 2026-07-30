@@ -459,6 +459,11 @@
     await saveRemoteNotebook();
   }
 
+  async function saveRemoteNotebook(){
+    // Remote sync is disabled in this deployment.
+    return;
+  }
+
   // ---------- render ----------
   function render(){
     if(state.screen === 'setup') return renderSetup();
