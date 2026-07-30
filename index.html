@@ -361,6 +361,8 @@
     .entry-head{flex-wrap:wrap;}
   }
 </style>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <div id="app">
@@ -375,11 +377,11 @@
   const app = document.getElementById('app');
   const state = {
     screen: 'loading',
-    config: null,       // {nameA, nameB, passcode}
+    config: null,       // {userName, notebookId, passcode, notebookTitle}
     entries: [],
-    currentUser: null,  // 'a' | 'b'
-    unlocked: false,
-    error: ''
+    error: '',
+    db: null,
+    prefillNotebookId: null
   };
 
   const storage = window.storage && typeof window.storage.get === 'function'
@@ -395,6 +397,15 @@
           localStorage.removeItem(key);
         }
       };
+
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
 
   const MONTHS = ['1-р сар','2-р сар','3-р сар','4-р сар','5-р сар','6-р сар','7-р сар','8-р сар','9-р сар','10-р сар','11-р сар','12-р сар'];
   const WEEKDAYS = ['Ням','Даваа','Мягмар','Лхагва','Пүрэв','Баасан','Бямба'];
@@ -421,12 +432,46 @@
     return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  function getQueryParam(name){
+    const params = new URLSearchParams(window.location.search);
+    return params.get(name);
+  }
+
+  function normalizeNotebookId(id){
+    return id ? id.trim().toLowerCase() : '';
+  }
+
+  function createRandomNotebookId(){
+    return Math.random().toString(36).slice(2,8);
+  }
+
+  async function initFirebase(){
+    try{
+      if(!firebase.apps.length){
+        firebase.initializeApp(firebaseConfig);
+      }
+      state.db = firebase.firestore();
+      return true;
+    }catch(e){
+      console.warn('Firebase init failed', e);
+      state.db = null;
+      return false;
+    }
+  }
+
+  async function ensureFirebase(){
+    if(state.db) return true;
+    return await initFirebase();
+  }
+
   async function loadInitial(){
+    await initFirebase();
+    state.prefillNotebookId = normalizeNotebookId(getQueryParam('notebook'));
     try{
       const cfg = await storage.get('config');
       if(cfg && cfg.value){
         state.config = JSON.parse(cfg.value);
-        state.screen = 'unlock';
+        state.screen = 'main';
       } else {
         state.screen = 'setup';
       }
@@ -434,6 +479,9 @@
       state.screen = 'setup';
     }
     render();
+    if(state.screen === 'main'){
+      await enterMain();
+    }
   }
 
   async function loadEntries(){
@@ -445,146 +493,217 @@
     }
   }
 
-  async function saveEntries(){
+  async function loadRemoteEntries(){
+    if(!state.config || !state.config.notebookId) return;
+    if(!await ensureFirebase()) return;
     try{
-      await storage.set('entries', JSON.stringify(state.entries));
-      await saveRemoteNotebook();
+      const doc = await state.db.collection('notebooks').doc(state.config.notebookId).get();
+      if(doc.exists){
+        const data = doc.data();
+        if(data && data.passcode !== state.config.passcode) return;
+        if(data && Array.isArray(data.entries)){
+          state.entries = data.entries;
+          await storage.set('entries', JSON.stringify(state.entries));
+        }
+        if(data && data.notebookTitle){
+          state.config.notebookTitle = data.notebookTitle;
+          await storage.set('config', JSON.stringify(state.config));
+        }
+      }
     }catch(e){
-      console.error('Хадгалахад алдаа гарлаа', e);
+      console.warn('Remote load failed', e);
     }
   }
 
+  async function saveEntries(){
+    await storage.set('entries', JSON.stringify(state.entries));
+    await saveRemoteNotebook();
+  }
+
   async function saveConfig(cfg){
+    state.config = cfg;
     await storage.set('config', JSON.stringify(cfg));
     await saveRemoteNotebook();
   }
 
   async function saveRemoteNotebook(){
-    // Remote sync is disabled in this deployment.
-    return;
+    if(!state.config || !state.config.notebookId) return;
+    if(!await ensureFirebase()) return;
+    try{
+      const doc = state.db.collection('notebooks').doc(state.config.notebookId);
+      await doc.set({
+        notebookTitle: state.config.notebookTitle || 'Хуваалцсан тэмдэглэл',
+        passcode: state.config.passcode,
+        entries: state.entries || [],
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    }catch(e){
+      console.warn('Save remote notebook failed', e);
+    }
+  }
+
+  async function createRemoteNotebook(cfg){
+    if(!await ensureFirebase()){
+      return { success: false, error: 'Firebase холболт байгаа эсэхийг шалгана уу.' };
+    }
+    try{
+      const notebookId = normalizeNotebookId(cfg.notebookId || createRandomNotebookId());
+      const doc = state.db.collection('notebooks').doc(notebookId);
+      const snapshot = await doc.get();
+      if(snapshot.exists){
+        return { success: false, error: 'Энэ кодтой тэмдэглэл аль хэдийн үүссэн байна.' };
+      }
+      await doc.set({
+        notebookTitle: cfg.notebookTitle || 'Хуваалцсан тэмдэглэл',
+        passcode: cfg.passcode,
+        members: [cfg.userName],
+        entries: [],
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      return { success: true, notebookId };
+    }catch(e){
+      console.warn('Create notebook failed', e);
+      return { success: false, error: 'Тэмдэглэл үүсгэхэд алдаа гарлаа.' };
+    }
+  }
+
+  async function joinRemoteNotebook(cfg){
+    if(!await ensureFirebase()){
+      return { success: false, error: 'Firebase холболт байгаа эсэхийг шалгана уу.' };
+    }
+    try{
+      const notebookId = normalizeNotebookId(cfg.notebookId);
+      if(!notebookId){
+        return { success: false, error: 'Дэвтэрийн код заавал шаардлагатай.' };
+      }
+      const doc = state.db.collection('notebooks').doc(notebookId);
+      const snapshot = await doc.get();
+      if(!snapshot.exists){
+        return { success: false, error: 'Ийм кодтой тэмдэглэл олдсонгүй.' };
+      }
+      const data = snapshot.data();
+      if(data.passcode !== cfg.passcode){
+        return { success: false, error: 'Нууц үг буруу байна.' };
+      }
+      const members = Array.isArray(data.members) ? Array.from(new Set([...data.members, cfg.userName])) : [cfg.userName];
+      await doc.set({ members }, { merge: true });
+      return { success: true, notebookId, data };
+    }catch(e){
+      console.warn('Join notebook failed', e);
+      return { success: false, error: 'Тэмдэглэл рүү нэгдэхэд алдаа гарлаа.' };
+    }
+  }
+
+  function getLocalNotebookUrl(){
+    if(!state.config || !state.config.notebookId) return null;
+    const url = new URL(window.location.href);
+    url.searchParams.set('notebook', state.config.notebookId);
+    return url.toString();
   }
 
   // ---------- render ----------
   function render(){
     if(state.screen === 'setup') return renderSetup();
-    if(state.screen === 'unlock') return renderUnlock();
-    if(state.screen === 'identity') return renderIdentity();
     if(state.screen === 'main') return renderMain();
   }
 
   function renderSetup(){
+    const notebookValue = state.prefillNotebookId || '';
     app.innerHTML = `
       <div class="gate">
         <div class="eyebrow">Тохиргоо</div>
-        <h1>Хоёулаа тохируулъя</h1>
-        <p class="subtitle">Энэ дэвтэр бол зөвхөн бид 2ын дурсамжийн дэвтэр юм шүү. Хэнд хэлээгүй нууцаа энд надтай хуваалцаж болно шүү.</p>
+        <h1>Тэмдэглэл хуваалцах</h1>
+        <p class="subtitle">Нэвтрэх нэр, тэмдэглэлийн код, нууц үг оруулж нэг тэмдэглэл рүү хамт хандаж болно.</p>
         <div class="card">
-          <label>Таны нэр</label>
-          <input type="text" id="nameA" placeholder="Жишээ: Болд" maxlength="30">
-          <label>Миний нэр</label>
-          <input type="text" id="nameB" placeholder="Жишээ: Сараа" maxlength="30">
-          <label>Нууц үг (хоёулаа мэднэ)</label>
+          <label>Өөрийн нэр</label>
+          <input type="text" id="userName" placeholder="Жишээ: Уянга" maxlength="30">
+          <label>Тэмдэглэлийн код (хуваалцахад)</label>
+          <input type="text" id="notebookId" placeholder="Хуваалцах код эсвэл сайжруулах" value="${escapeHtml(notebookValue)}" maxlength="20">
+          <label>Тэмдэглэлийн гарчиг</label>
+          <input type="text" id="notebookTitle" placeholder="Жишээ: Хамтдаа бичих тэмдэглэл" maxlength="40">
+          <label>Нууц үг</label>
           <input type="password" id="pass1" placeholder="Нууц үг">
           <label>Нууц үгээ дахин оруулна уу</label>
           <input type="password" id="pass2" placeholder="Дахин оруулах">
           <div class="error-text" id="setupError"></div>
-          <button class="btn btn-primary btn-block" id="setupBtn">Эхлүүлэх</button>
+          <button class="btn btn-primary btn-block" id="createBtn">Шинээр үүсгэх</button>
+          <button class="btn btn-block" id="joinBtn">Одоо байгаа тус кодоор нэвтрэх</button>
         </div>
       </div>
     `;
-    document.getElementById('setupBtn').onclick = async () => {
-      const nameA = document.getElementById('nameA').value.trim();
-      const nameB = document.getElementById('nameB').value.trim();
-      const p1 = document.getElementById('pass1').value;
-      const p2 = document.getElementById('pass2').value;
-      const errEl = document.getElementById('setupError');
-      if(!nameA || !nameB){ errEl.textContent = 'Хоёр нэрээ хоёуланг нь оруулна уу.'; return; }
-      if(!p1 || p1.length < 3){ errEl.textContent = 'Нууц үг дор хаяж 3 тэмдэгт байх ёстой.'; return; }
-      if(p1 !== p2){ errEl.textContent = 'Нууц үг таарахгүй байна.'; return; }
-      const cfg = {nameA, nameB, passcode: p1};
-      errEl.textContent = 'Хадгалж байна…';
-      try{
-        await saveConfig(cfg);
-        state.config = cfg;
-        state.screen = 'identity';
-        render();
-      }catch(e){
-        errEl.textContent = 'Алдаа гарлаа, дахин оролдоно уу.';
-      }
-    };
-  }
 
-  function renderUnlock(){
-    app.innerHTML = `
-      <div class="gate">
-        <div class="eyebrow">Хувийн дэвтэр</div>
-        <h1>Тавтай морил</h1>
-        <p class="subtitle">Нууц үгээ оруулаад дэвтэрээ нээгээрэй.</p>
-        <div class="card">
-          <label>Нууц үг</label>
-          <input type="password" id="unlockPass" placeholder="Нууц үг">
-          <div class="error-text" id="unlockError"></div>
-          <button class="btn btn-primary btn-block" id="unlockBtn">Нээх</button>
-        </div>
-      </div>
-    `;
-    const tryUnlock = () => {
-      const val = document.getElementById('unlockPass').value;
-      const errEl = document.getElementById('unlockError');
-      if(val === state.config.passcode){
-        state.unlocked = true;
-        state.screen = 'identity';
-        render();
-      } else {
-        errEl.textContent = 'Нууц үг буруу байна.';
-      }
+    const errEl = document.getElementById('setupError');
+    document.getElementById('createBtn').onclick = async () => {
+      errEl.textContent = '';
+      const userName = document.getElementById('userName').value.trim();
+      const notebookId = normalizeNotebookId(document.getElementById('notebookId').value);
+      const notebookTitle = document.getElementById('notebookTitle').value.trim();
+      const pass1 = document.getElementById('pass1').value;
+      const pass2 = document.getElementById('pass2').value;
+      if(!userName){ errEl.textContent = 'Өөрийн нэрээ оруулна уу.'; return; }
+      if(!pass1 || pass1.length < 3){ errEl.textContent = 'Нууц үг дор хаяж 3 тэмдэгт байх ёстой.'; return; }
+      if(pass1 !== pass2){ errEl.textContent = 'Нууц үг таарахгүй байна.'; return; }
+      const cfg = { userName, notebookId, notebookTitle, passcode: pass1 };
+      errEl.textContent = 'Тэмдэглэл үүсгэж байна…';
+      const result = await createRemoteNotebook(cfg);
+      if(!result.success){ errEl.textContent = result.error; return; }
+      cfg.notebookId = result.notebookId;
+      await saveConfig(cfg);
+      state.screen = 'main';
+      await enterMain();
     };
-    document.getElementById('unlockBtn').onclick = tryUnlock;
-    document.getElementById('unlockPass').addEventListener('keydown', e => { if(e.key === 'Enter') tryUnlock(); });
-  }
 
-  function renderIdentity(){
-    app.innerHTML = `
-      <div class="gate">
-        <div class="eyebrow">Нэвтрэх</div>
-        <h1>Та хэн бэ?</h1>
-        <p class="subtitle">Өөрийн хэсэгт тэмдэглэлээ бичиж эхлээрэй.</p>
-        <div class="who-row">
-          <div class="who-card a" id="pickA">${escapeHtml(state.config.nameA)}</div>
-          <div class="who-card b" id="pickB">${escapeHtml(state.config.nameB)}</div>
-        </div>
-      </div>
-    `;
-    document.getElementById('pickA').onclick = () => { state.currentUser = 'a'; enterMain(); };
-    document.getElementById('pickB').onclick = () => { state.currentUser = 'b'; enterMain(); };
+    document.getElementById('joinBtn').onclick = async () => {
+      errEl.textContent = '';
+      const userName = document.getElementById('userName').value.trim();
+      const notebookId = normalizeNotebookId(document.getElementById('notebookId').value);
+      const pass1 = document.getElementById('pass1').value;
+      const pass2 = document.getElementById('pass2').value;
+      if(!userName){ errEl.textContent = 'Өөрийн нэрээ оруулна уу.'; return; }
+      if(!notebookId){ errEl.textContent = 'Тэмдэглэлийн кодоо оруулна уу.'; return; }
+      if(!pass1 || pass1.length < 3){ errEl.textContent = 'Нууц үг дор хаяж 3 тэмдэгт байх ёстой.'; return; }
+      if(pass1 !== pass2){ errEl.textContent = 'Нууц үг таарахгүй байна.'; return; }
+      const cfg = { userName, notebookId, passcode: pass1 };
+      errEl.textContent = 'Тэмдэглэл рүү нэгдэж байна…';
+      const result = await joinRemoteNotebook(cfg);
+      if(!result.success){ errEl.textContent = result.error; return; }
+      cfg.notebookTitle = result.data.notebookTitle || cfg.notebookTitle;
+      await saveConfig(cfg);
+      state.screen = 'main';
+      await enterMain();
+    };
   }
 
   async function enterMain(){
     state.screen = 'main';
     app.innerHTML = `<div class="gate"><div class="spinner"></div><div class="loading-msg">Тэмдэглэлүүдийг ачаалж байна…</div></div>`;
     await loadEntries();
+    await loadRemoteEntries();
     render();
   }
 
   let selectedMood = null;
 
   function renderMain(){
-    const me = state.currentUser === 'a' ? state.config.nameA : state.config.nameB;
+    const me = state.config.userName;
     const sorted = [...state.entries].sort((x,y) => x.ts - y.ts);
+    const shareUrl = getLocalNotebookUrl();
 
     app.innerHTML = `
       <div class="wrap">
         <div class="topbar">
           <div class="topbar-left">
-            <div class="eyebrow">${fmtDate(Date.now())}</div>
+            <div class="eyebrow">${escapeHtml(state.config.notebookTitle || 'Хуваалцсан тэмдэглэл')}</div>
             <div class="who-badge">Нэвтэрсэн: ${escapeHtml(me)}</div>
           </div>
           <div class="topbar-actions">
-            <button class="icon-btn" id="switchBtn" title="Хэрэглэгч солих">⇄</button>
+            <button class="icon-btn" id="switchBtn" title="Тохиргоо руу буцах">⇄</button>
             <button class="icon-btn" id="settingsBtn" title="Тохиргоо">⚙</button>
           </div>
         </div>
-
+        <div style="margin-bottom:18px; font-family:'Inter',sans-serif; font-size:13px; color:var(--muted);">
+          ${shareUrl ? `Хуваалцах линк: <a href="${escapeHtml(shareUrl)}" style="color:var(--gold);">${escapeHtml(shareUrl)}</a>` : ''}
+        </div>
         <div class="compose">
           <label style="margin-top:0;">Юу бодож байна?</label>
           <textarea id="entryText" placeholder="Өнөөдрийн тухай бичээрэй…"></textarea>
@@ -605,7 +724,7 @@
       </div>
     `;
 
-    document.getElementById('switchBtn').onclick = () => { state.currentUser = null; state.screen = 'identity'; render(); };
+    document.getElementById('switchBtn').onclick = () => { state.screen = 'setup'; render(); };
     document.getElementById('settingsBtn').onclick = openSettingsModal;
 
     document.querySelectorAll('.mood-btn').forEach(btn => {
@@ -623,7 +742,7 @@
       if(!text) { ta.focus(); return; }
       const entry = {
         id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
-        author: state.currentUser,
+        author: state.config.userName,
         text,
         mood: selectedMood,
         ts: Date.now()
@@ -638,12 +757,11 @@
   }
 
   function renderEntry(entry){
-    const isA = entry.author === 'a';
-    const authorName = isA ? state.config.nameA : state.config.nameB;
+    const authorName = entry.author || 'Тэмдэглэлч';
     const mood = MOODS.find(m => m.key === entry.mood);
-    const canEdit = entry.author === state.currentUser;
+    const canEdit = entry.author === state.config.userName;
     return `
-      <div class="entry-row ${isA ? 'side-a' : 'side-b'}" data-id="${entry.id}">
+      <div class="entry-row" data-id="${entry.id}">
         <span class="node"></span>
         <div class="entry-card">
           <div class="entry-head">
@@ -731,11 +849,10 @@
       document.getElementById('confirmReset').onclick = async () => {
         try{
           await storage.delete('config');
-        await storage.delete('entries');
+          await storage.delete('entries');
         }catch(e){}
         state.config = null;
         state.entries = [];
-        state.currentUser = null;
         state.screen = 'setup';
         overlay.remove();
         render();
