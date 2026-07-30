@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="mn">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Бидний хувийн дэвтэр</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500;1,600&family=Merriweather:wght@300;400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B1A2E;
+    --ink-deep:#131226;
+    --paper:#EDE8DC;
+    --gold:#C9A961;
+    --gold-dim:#8f7c4d;
+    --rose:#C97B84;
+    --sage:#7C9885;
+    --muted:#8886A0;
+    --danger:#C4707A;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      radial-gradient(ellipse at top, #26234a 0%, var(--ink) 45%, var(--ink-deep) 100%);
+    min-height:100vh;
+    color:var(--paper);
+    font-family:'Merriweather', Georgia, serif;
+    font-weight:300;
+    -webkit-font-smoothing:antialiased;
+  }
+  #app{
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:32px 16px 80px;
+  }
+  .eyebrow{
+    font-family:'Inter',sans-serif;
+    letter-spacing:.18em;
+    text-transform:uppercase;
+    font-size:11px;
+    color:var(--gold);
+    margin-bottom:10px;
+  }
+  h1,h2,h3{
+    font-family:'Playfair Display', Georgia, serif;
+    font-weight:600;
+    margin:0 0 8px;
+  }
+  .subtitle{
+    color:var(--muted);
+    font-size:15px;
+    margin:0 0 28px;
+    text-align:center;
+    max-width:360px;
+    line-height:1.6;
+  }
+  /* ---- centered gate cards (loading / setup / unlock / identity) ---- */
+  .gate{
+    width:100%;
+    max-width:420px;
+    margin-top:8vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    animation:fadeUp .5s ease both;
+  }
+  @keyframes fadeUp{
+    from{opacity:0; transform:translateY(14px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+  .card{
+    background:rgba(237,232,220,0.04);
+    border:1px solid rgba(201,169,97,0.25);
+    border-radius:2px;
+    padding:36px 32px;
+    width:100%;
+    position:relative;
+  }
+  .card::before{
+    content:"";
+    position:absolute;
+    top:0; left:0; right:0;
+    height:2px;
+    background:linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity:.6;
+  }
+  label{
+    display:block;
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    letter-spacing:.04em;
+    color:var(--muted);
+    margin:16px 0 6px;
+  }
+  label:first-of-type{margin-top:0;}
+  input[type=text], input[type=password], textarea{
+    width:100%;
+    background:rgba(0,0,0,0.18);
+    border:1px solid rgba(201,169,97,0.3);
+    border-radius:2px;
+    color:var(--paper);
+    padding:11px 12px;
+    font-family:'Merriweather', Georgia, serif;
+    font-size:15px;
+    outline:none;
+    transition:border-color .2s ease, box-shadow .2s ease;
+  }
+  input:focus, textarea:focus{
+    border-color:var(--gold);
+    box-shadow:0 0 0 3px rgba(201,169,97,0.12);
+  }
+  textarea{resize:vertical; min-height:96px; line-height:1.6;}
+  .btn{
+    font-family:'Inter',sans-serif;
+    font-weight:500;
+    font-size:14px;
+    letter-spacing:.02em;
+    border:1px solid var(--gold);
+    background:transparent;
+    color:var(--gold);
+    padding:11px 22px;
+    border-radius:2px;
+    cursor:pointer;
+    transition:all .2s ease;
+  }
+  .btn:hover{background:rgba(201,169,97,0.12); box-shadow:0 0 14px rgba(201,169,97,0.25);}
+  .btn:active{transform:scale(.98);}
+  .btn-primary{
+    background:var(--gold);
+    color:var(--ink-deep);
+  }
+  .btn-primary:hover{background:#d8b874; box-shadow:0 0 18px rgba(201,169,97,0.4);}
+  .btn-block{width:100%; margin-top:22px;}
+  .btn-ghost{
+    border-color:transparent;
+    color:var(--muted);
+    padding:8px 10px;
+    font-size:13px;
+  }
+  .btn-ghost:hover{color:var(--paper); background:rgba(255,255,255,0.05); box-shadow:none;}
+  .error-text{
+    color:var(--danger);
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    margin-top:10px;
+    min-height:16px;
+  }
+  .spinner{
+    width:22px; height:22px;
+    border:2px solid rgba(201,169,97,0.25);
+    border-top-color:var(--gold);
+    border-radius:50%;
+    animation:spin 0.9s linear infinite;
+    margin-bottom:16px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-msg{color:var(--muted); font-family:'Inter',sans-serif; font-size:13px;}
+
+  /* identity pick */
+  .who-row{
+    display:flex;
+    gap:16px;
+    width:100%;
+    max-width:420px;
+  }
+  .who-card{
+    flex:1;
+    background:rgba(237,232,220,0.04);
+    border:1px solid rgba(201,169,97,0.25);
+    border-radius:2px;
+    padding:28px 14px;
+    text-align:center;
+    cursor:pointer;
+    transition:all .2s ease;
+    font-family:'Playfair Display',serif;
+    font-size:19px;
+    font-style:italic;
+  }
+  .who-card:hover{transform:translateY(-3px);}
+  .who-card.a{border-color:rgba(201,123,132,.5);}
+  .who-card.a:hover{box-shadow:0 8px 22px rgba(201,123,132,0.2); border-color:var(--rose);}
+  .who-card.b{border-color:rgba(124,152,133,.5);}
+  .who-card.b:hover{box-shadow:0 8px 22px rgba(124,152,133,0.2); border-color:var(--sage);}
+
+  /* ---- main app ---- */
+  .wrap{width:100%; max-width:760px;}
+  .topbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:6px;
+  }
+  .topbar-left .eyebrow{margin-bottom:2px;}
+  .who-badge{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    color:var(--gold);
+  }
+  .topbar-actions{display:flex; gap:6px; align-items:center;}
+  .icon-btn{
+    background:none; border:none; cursor:pointer;
+    color:var(--muted); font-size:18px;
+    padding:6px; border-radius:4px;
+    transition:color .2s ease, background .2s ease;
+  }
+  .icon-btn:hover{color:var(--gold); background:rgba(255,255,255,0.05);}
+
+  .compose{
+    margin-top:22px;
+    background:rgba(237,232,220,0.04);
+    border:1px solid rgba(201,169,97,0.25);
+    border-radius:2px;
+    padding:22px 22px 18px;
+    position:relative;
+  }
+  .compose::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:2px;
+    background:linear-gradient(90deg, transparent, var(--gold), transparent);
+    opacity:.6;
+  }
+  .mood-row{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    margin:10px 0 4px;
+  }
+  .mood-btn{
+    background:rgba(0,0,0,0.18);
+    border:1px solid rgba(201,169,97,0.2);
+    border-radius:20px;
+    padding:6px 12px;
+    font-size:13px;
+    font-family:'Inter',sans-serif;
+    color:var(--muted);
+    cursor:pointer;
+    transition:all .15s ease;
+  }
+  .mood-btn:hover{border-color:var(--gold); color:var(--paper);}
+  .mood-btn.active{
+    background:rgba(201,169,97,0.18);
+    border-color:var(--gold);
+    color:var(--gold);
+  }
+  .compose-actions{
+    display:flex;
+    justify-content:flex-end;
+    margin-top:14px;
+  }
+
+  /* timeline */
+  .timeline-title{
+    margin-top:44px;
+    margin-bottom:26px;
+    text-align:center;
+  }
+  .timeline-title h2{font-size:22px;}
+  .timeline{
+    position:relative;
+  }
+  .timeline::before{
+    content:"";
+    position:absolute;
+    left:50%; top:0; bottom:0;
+    width:2px;
+    background:linear-gradient(180deg, transparent, rgba(201,169,97,0.55) 6%, rgba(201,169,97,0.55) 94%, transparent);
+    transform:translateX(-50%);
+  }
+  .entry-row{
+    position:relative;
+    display:flex;
+    margin:26px 0;
+    animation:fadeUp .4s ease both;
+  }
+  .entry-row.side-a{justify-content:flex-start; padding-right:52%;}
+  .entry-row.side-b{justify-content:flex-end; padding-left:52%;}
+  .node{
+    position:absolute;
+    top:20px; left:50%;
+    width:11px; height:11px;
+    border-radius:50%;
+    transform:translateX(-50%);
+    background:var(--ink);
+    border:2px solid var(--gold);
+    z-index:2;
+  }
+  .entry-row.side-a .node{border-color:var(--rose);}
+  .entry-row.side-b .node{border-color:var(--sage);}
+  .entry-card{
+    background:rgba(237,232,220,0.045);
+    border:1px solid rgba(201,169,97,0.18);
+    border-left:3px solid var(--gold);
+    border-radius:2px;
+    padding:16px 18px;
+    width:100%;
+    position:relative;
+  }
+  .entry-row.side-a .entry-card{border-left-color:var(--rose);}
+  .entry-row.side-b .entry-card{border-left-color:var(--sage);}
+  .entry-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    font-family:'Inter',sans-serif;
+    font-size:12px;
+    color:var(--muted);
+    margin-bottom:8px;
+    gap:8px;
+  }
+  .entry-author{font-weight:600;}
+  .entry-row.side-a .entry-author{color:var(--rose);}
+  .entry-row.side-b .entry-author{color:var(--sage);}
+  .entry-mood{font-size:15px; margin-right:4px;}
+  .entry-text{
+    font-size:15px;
+    line-height:1.7;
+    color:var(--paper);
+    white-space:pre-wrap;
+  }
+  .entry-actions{
+    display:flex;
+    gap:4px;
+    margin-top:10px;
+    justify-content:flex-end;
+  }
+  .empty-state{
+    text-align:center;
+    color:var(--muted);
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    padding:50px 20px;
+    border:1px dashed rgba(201,169,97,0.25);
+    border-radius:2px;
+  }
+  /* modal */
+  .modal-overlay{
+    position:fixed; inset:0;
+    background:rgba(10,9,20,0.65);
+    display:flex; align-items:center; justify-content:center;
+    z-index:50;
+    animation:fadeUp .2s ease both;
+  }
+  .modal{
+    background:var(--ink);
+    border:1px solid rgba(201,169,97,0.3);
+    border-radius:2px;
+    padding:28px;
+    max-width:360px;
+    width:90%;
+  }
+  .modal-actions{display:flex; gap:10px; justify-content:flex-end; margin-top:20px;}
+
+  @media (max-width:700px){
+    .entry-row.side-a, .entry-row.side-b{padding:0;}
+    .timeline::before{left:6px;}
+    .node{left:6px;}
+    .entry-row{padding-left:26px !important;}
+    .entry-head{flex-wrap:wrap;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="gate" id="loadingScreen">
+    <div class="spinner"></div>
+    <div class="loading-msg">Ачаалж байна…</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const app = document.getElementById('app');
+  const state = {
+    screen: 'loading',
+    config: null,       // {nameA, nameB, passcode}
+    entries: [],
+    currentUser: null,  // 'a' | 'b'
+    unlocked: false,
+    error: ''
+  };
+
+  const storage = window.storage && typeof window.storage.get === 'function'
+    ? window.storage
+    : {
+        async get(key){
+          return { value: localStorage.getItem(key) };
+        },
+        async set(key, value){
+          localStorage.setItem(key, value);
+        },
+        async delete(key){
+          localStorage.removeItem(key);
+        }
+      };
+
+  const MONTHS = ['1-р сар','2-р сар','3-р сар','4-р сар','5-р сар','6-р сар','7-р сар','8-р сар','9-р сар','10-р сар','11-р сар','12-р сар'];
+  const WEEKDAYS = ['Ням','Даваа','Мягмар','Лхагва','Пүрэв','Баасан','Бямба'];
+  const MOODS = [
+    {key:'happy', emoji:'😊', label:'Сайхан'},
+    {key:'calm', emoji:'😌', label:'Тайван'},
+    {key:'love', emoji:'❤️', label:'Дулаахан'},
+    {key:'tired', emoji:'🥱', label:'Ядарсан'},
+    {key:'sad', emoji:'😢', label:'Гунигтай'},
+    {key:'mad', emoji:'😤', label:'Уурласан'}
+  ];
+
+  function fmtDate(ts){
+    const d = new Date(ts);
+    return `${d.getFullYear()} оны ${MONTHS[d.getMonth()]}ын ${d.getDate()}, ${WEEKDAYS[d.getDay()]}`;
+  }
+  function fmtTime(ts){
+    const d = new Date(ts);
+    const h = String(d.getHours()).padStart(2,'0');
+    const m = String(d.getMinutes()).padStart(2,'0');
+    return `${h}:${m}`;
+  }
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function loadInitial(){
+    await initRemote();
+    try{
+      const cfg = await storage.get('config');
+      if(cfg && cfg.value){
+        state.config = JSON.parse(cfg.value);
+        state.screen = 'unlock';
+      } else if(remoteEnabled){
+        state.screen = 'unlock';
+      } else {
+        state.screen = 'setup';
+      }
+    }catch(e){
+      state.screen = remoteEnabled ? 'unlock' : 'setup';
+    }
+    render();
+  }
+
+  async function loadEntries(){
+    try{
+      const res = await storage.get('entries');
+      state.entries = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){
+      state.entries = [];
+    }
+  }
+
+  async function saveEntries(){
+    try{
+      await storage.set('entries', JSON.stringify(state.entries));
+      await saveRemoteNotebook();
+    }catch(e){
+      console.error('Хадгалахад алдаа гарлаа', e);
+    }
+  }
+
+  async function saveConfig(cfg){
+    await storage.set('config', JSON.stringify(cfg));
+    await saveRemoteNotebook();
+  }
+
+  // ---------- render ----------
+  function render(){
+    if(state.screen === 'setup') return renderSetup();
+    if(state.screen === 'unlock') return renderUnlock();
+    if(state.screen === 'identity') return renderIdentity();
+    if(state.screen === 'main') return renderMain();
+  }
+
+  function renderSetup(){
+    app.innerHTML = `
+      <div class="gate">
+        <div class="eyebrow">Тохиргоо</div>
+        <h1>Хоёулаа тохируулъя</h1>
+        <p class="subtitle">Энэ дэвтэр бол зөвхөн бид 2ын дурсамжийн дэвтэр юм шүү. Хэнд хэлээгүй нууцаа энд надтай хуваалцаж болно шүү.</p>
+        <div class="card">
+          <label>Таны нэр</label>
+          <input type="text" id="nameA" placeholder="Жишээ: Болд" maxlength="30">
+          <label>Миний нэр</label>
+          <input type="text" id="nameB" placeholder="Жишээ: Сараа" maxlength="30">
+          <label>Нууц үг (хоёулаа мэднэ)</label>
+          <input type="password" id="pass1" placeholder="Нууц үг">
+          <label>Нууц үгээ дахин оруулна уу</label>
+          <input type="password" id="pass2" placeholder="Дахин оруулах">
+          <div class="error-text" id="setupError"></div>
+          <button class="btn btn-primary btn-block" id="setupBtn">Эхлүүлэх</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('setupBtn').onclick = async () => {
+      const nameA = document.getElementById('nameA').value.trim();
+      const nameB = document.getElementById('nameB').value.trim();
+      const p1 = document.getElementById('pass1').value;
+      const p2 = document.getElementById('pass2').value;
+      const errEl = document.getElementById('setupError');
+      if(!nameA || !nameB){ errEl.textContent = 'Хоёр нэрээ хоёуланг нь оруулна уу.'; return; }
+      if(!p1 || p1.length < 3){ errEl.textContent = 'Нууц үг дор хаяж 3 тэмдэгт байх ёстой.'; return; }
+      if(p1 !== p2){ errEl.textContent = 'Нууц үг таарахгүй байна.'; return; }
+      const cfg = {nameA, nameB, passcode: p1};
+      errEl.textContent = 'Хадгалж байна…';
+      try{
+        await saveConfig(cfg);
+        state.config = cfg;
+        state.screen = 'identity';
+        render();
+      }catch(e){
+        errEl.textContent = 'Алдаа гарлаа, дахин оролдоно уу.';
+      }
+    };
+  }
+
+  function renderUnlock(){
+    app.innerHTML = `
+      <div class="gate">
+        <div class="eyebrow">Хувийн дэвтэр</div>
+        <h1>Тавтай морил</h1>
+        <p class="subtitle">Нууц үгээ оруулаад дэвтэрээ нээгээрэй.</p>
+        <div class="card">
+          <label>Нууц үг</label>
+          <input type="password" id="unlockPass" placeholder="Нууц үг">
+          <div class="error-text" id="unlockError"></div>
+          <button class="btn btn-primary btn-block" id="unlockBtn">Нээх</button>
+        </div>
+      </div>
+    `;
+    const tryUnlock = () => {
+      const val = document.getElementById('unlockPass').value;
+      const errEl = document.getElementById('unlockError');
+      if(val === state.config.passcode){
+        state.unlocked = true;
+        state.screen = 'identity';
+        render();
+      } else {
+        errEl.textContent = 'Нууц үг буруу байна.';
+      }
+    };
+    document.getElementById('unlockBtn').onclick = tryUnlock;
+    document.getElementById('unlockPass').addEventListener('keydown', e => { if(e.key === 'Enter') tryUnlock(); });
+  }
+
+  function renderIdentity(){
+    app.innerHTML = `
+      <div class="gate">
+        <div class="eyebrow">Нэвтрэх</div>
+        <h1>Та хэн бэ?</h1>
+        <p class="subtitle">Өөрийн хэсэгт тэмдэглэлээ бичиж эхлээрэй.</p>
+        <div class="who-row">
+          <div class="who-card a" id="pickA">${escapeHtml(state.config.nameA)}</div>
+          <div class="who-card b" id="pickB">${escapeHtml(state.config.nameB)}</div>
+        </div>
+      </div>
+    `;
+    document.getElementById('pickA').onclick = () => { state.currentUser = 'a'; enterMain(); };
+    document.getElementById('pickB').onclick = () => { state.currentUser = 'b'; enterMain(); };
+  }
+
+  async function enterMain(){
+    state.screen = 'main';
+    app.innerHTML = `<div class="gate"><div class="spinner"></div><div class="loading-msg">Тэмдэглэлүүдийг ачаалж байна…</div></div>`;
+    await loadEntries();
+    render();
+  }
+
+  let selectedMood = null;
+
+  function renderMain(){
+    const me = state.currentUser === 'a' ? state.config.nameA : state.config.nameB;
+    const sorted = [...state.entries].sort((x,y) => x.ts - y.ts);
+
+    app.innerHTML = `
+      <div class="wrap">
+        <div class="topbar">
+          <div class="topbar-left">
+            <div class="eyebrow">${fmtDate(Date.now())}</div>
+            <div class="who-badge">Нэвтэрсэн: ${escapeHtml(me)}</div>
+          </div>
+          <div class="topbar-actions">
+            <button class="icon-btn" id="switchBtn" title="Хэрэглэгч солих">⇄</button>
+            <button class="icon-btn" id="settingsBtn" title="Тохиргоо">⚙</button>
+          </div>
+        </div>
+
+        <div class="compose">
+          <label style="margin-top:0;">Юу бодож байна?</label>
+          <textarea id="entryText" placeholder="Өнөөдрийн тухай бичээрэй…"></textarea>
+          <label>Сэтгэл санаа</label>
+          <div class="mood-row" id="moodRow">
+            ${MOODS.map(m => `<button type="button" class="mood-btn" data-mood="${m.key}">${m.emoji} ${m.label}</button>`).join('')}
+          </div>
+          <div class="compose-actions">
+            <button class="btn btn-primary" id="saveEntryBtn">Нэмэх</button>
+          </div>
+        </div>
+
+        <div class="timeline-title"><h2>Дурсамжууд</h2></div>
+
+        ${sorted.length === 0 ? `
+          <div class="empty-state">Одоогоор бичвэр алга.<br>Эхний тэмдэглэлээ дээрээс бичээрэй.</div>
+        ` : `<div class="timeline" id="timelineEl">${sorted.map(renderEntry).join('')}</div>`}
+      </div>
+    `;
+
+    document.getElementById('switchBtn').onclick = () => { state.currentUser = null; state.screen = 'identity'; render(); };
+    document.getElementById('settingsBtn').onclick = openSettingsModal;
+
+    document.querySelectorAll('.mood-btn').forEach(btn => {
+      btn.onclick = () => {
+        const isActive = btn.classList.contains('active');
+        document.querySelectorAll('.mood-btn').forEach(b => b.classList.remove('active'));
+        if(!isActive){ btn.classList.add('active'); selectedMood = btn.dataset.mood; }
+        else { selectedMood = null; }
+      };
+    });
+
+    document.getElementById('saveEntryBtn').onclick = async () => {
+      const ta = document.getElementById('entryText');
+      const text = ta.value.trim();
+      if(!text) { ta.focus(); return; }
+      const entry = {
+        id: 'e' + Date.now() + Math.random().toString(36).slice(2,7),
+        author: state.currentUser,
+        text,
+        mood: selectedMood,
+        ts: Date.now()
+      };
+      state.entries.push(entry);
+      await saveEntries();
+      selectedMood = null;
+      renderMain();
+    };
+
+    bindEntryActions();
+  }
+
+  function renderEntry(entry){
+    const isA = entry.author === 'a';
+    const authorName = isA ? state.config.nameA : state.config.nameB;
+    const mood = MOODS.find(m => m.key === entry.mood);
+    const canEdit = entry.author === state.currentUser;
+    return `
+      <div class="entry-row ${isA ? 'side-a' : 'side-b'}" data-id="${entry.id}">
+        <span class="node"></span>
+        <div class="entry-card">
+          <div class="entry-head">
+            <span class="entry-author">${escapeHtml(authorName)}</span>
+            <span>${mood ? `<span class="entry-mood">${mood.emoji}</span>` : ''}${fmtDate(entry.ts)} · ${fmtTime(entry.ts)}</span>
+          </div>
+          <div class="entry-text" data-role="text">${escapeHtml(entry.text)}</div>
+          ${canEdit ? `
+            <div class="entry-actions">
+              <button class="icon-btn" data-action="edit" title="Засах">✎</button>
+              <button class="icon-btn" data-action="delete" title="Устгах">🗑</button>
+            </div>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function bindEntryActions(){
+    document.querySelectorAll('.entry-row').forEach(row => {
+      const id = row.dataset.id;
+      const editBtn = row.querySelector('[data-action="edit"]');
+      const delBtn = row.querySelector('[data-action="delete"]');
+      if(editBtn) editBtn.onclick = () => startEdit(row, id);
+      if(delBtn) delBtn.onclick = () => deleteEntry(id);
+    });
+  }
+
+  function startEdit(row, id){
+    const entry = state.entries.find(e => e.id === id);
+    if(!entry) return;
+    const textEl = row.querySelector('[data-role="text"]');
+    const actionsEl = row.querySelector('.entry-actions');
+    textEl.innerHTML = `<textarea style="width:100%; min-height:80px;">${escapeHtml(entry.text)}</textarea>`;
+    const ta = textEl.querySelector('textarea');
+    ta.focus();
+    actionsEl.innerHTML = `
+      <button class="btn btn-ghost" data-action="cancel">Болих</button>
+      <button class="btn btn-primary" data-action="save" style="padding:6px 14px; font-size:13px;">Хадгалах</button>
+    `;
+    actionsEl.querySelector('[data-action="cancel"]').onclick = () => renderMain();
+    actionsEl.querySelector('[data-action="save"]').onclick = async () => {
+      const newText = ta.value.trim();
+      if(!newText) return;
+      entry.text = newText;
+      entry.editedTs = Date.now();
+      await saveEntries();
+      renderMain();
+    };
+  }
+
+  async function deleteEntry(id){
+    state.entries = state.entries.filter(e => e.id !== id);
+    await saveEntries();
+    renderMain();
+  }
+
+  function openSettingsModal(){
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h3>Тохиргоо</h3>
+        <p class="subtitle" style="text-align:left; margin:8px 0 0;">Бүх нэр, нууц үг, тэмдэглэлийг устгаад дахин эхлэх боломжтой. Энэ үйлдлийг буцаах боломжгүй.</p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" id="closeModal">Хаах</button>
+          <button class="btn" style="border-color:var(--danger); color:var(--danger);" id="resetAllBtn">Дахин эхлэх</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+    document.getElementById('closeModal').onclick = () => overlay.remove();
+    document.getElementById('resetAllBtn').onclick = async () => {
+      overlay.innerHTML = `
+        <div class="modal">
+          <h3>Итгэлтэй байна уу?</h3>
+          <p class="subtitle" style="text-align:left; margin:8px 0 0;">Бүх өгөгдлийг устгах уу? Энэ үйлдлийг буцаах боломжгүй.</p>
+          <div class="modal-actions">
+            <button class="btn btn-ghost" id="cancelReset">Болих</button>
+            <button class="btn btn-primary" style="background:var(--danger); border-color:var(--danger); color:#fff;" id="confirmReset">Тийм, устга</button>
+          </div>
+        </div>
+      `;
+      document.getElementById('cancelReset').onclick = () => overlay.remove();
+      document.getElementById('confirmReset').onclick = async () => {
+        try{
+          await storage.delete('config');
+        await storage.delete('entries');
+        }catch(e){}
+        state.config = null;
+        state.entries = [];
+        state.currentUser = null;
+        state.screen = 'setup';
+        overlay.remove();
+        render();
+      };
+    };
+  }
+
+  loadInitial();
+})();
+</script>
+</body>
+</html>
