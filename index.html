@@ -407,6 +407,12 @@
     appId: "YOUR_APP_ID"
   };
 
+  function hasFirebaseConfig(){
+    return firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('YOUR_API_KEY')
+      && firebaseConfig.projectId && !firebaseConfig.projectId.includes('YOUR_PROJECT_ID')
+      && firebaseConfig.appId && !firebaseConfig.appId.includes('YOUR_APP_ID');
+  }
+
   const MONTHS = ['1-р сар','2-р сар','3-р сар','4-р сар','5-р сар','6-р сар','7-р сар','8-р сар','9-р сар','10-р сар','11-р сар','12-р сар'];
   const WEEKDAYS = ['Ням','Даваа','Мягмар','Лхагва','Пүрэв','Баасан','Бямба'];
   const MOODS = [
@@ -543,8 +549,11 @@
   }
 
   async function createRemoteNotebook(cfg){
+    if(!hasFirebaseConfig()){
+      return { success: false, error: 'Firebase config тохируулаагүй байна. index.html дахь firebaseConfig-ыг өөрчил.' };
+    }
     if(!await ensureFirebase()){
-      return { success: false, error: 'Firebase холболт байгаа эсэхийг шалгана уу.' };
+      return { success: false, error: 'Firebase холболт байхгүй байна. Сүлжээний холболтоо шалга.' };
     }
     try{
       const notebookId = normalizeNotebookId(cfg.notebookId || createRandomNotebookId());
@@ -563,7 +572,8 @@
       return { success: true, notebookId };
     }catch(e){
       console.warn('Create notebook failed', e);
-      return { success: false, error: 'Тэмдэглэл үүсгэхэд алдаа гарлаа.' };
+      const message = e && e.message ? e.message : '';
+      return { success: false, error: 'Тэмдэглэл үүсгэхэд алдаа гарлаа: ' + message };
     }
   }
 
