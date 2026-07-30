@@ -422,19 +422,16 @@
   }
 
   async function loadInitial(){
-    await initRemote();
     try{
       const cfg = await storage.get('config');
       if(cfg && cfg.value){
         state.config = JSON.parse(cfg.value);
         state.screen = 'unlock';
-      } else if(remoteEnabled){
-        state.screen = 'unlock';
       } else {
         state.screen = 'setup';
       }
     }catch(e){
-      state.screen = remoteEnabled ? 'unlock' : 'setup';
+      state.screen = 'setup';
     }
     render();
   }
